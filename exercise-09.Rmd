@@ -1,0 +1,258 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r packages}
+install.packages("skimr")
+library(skimr)
+library(tidyverse)
+```
+
+#### **DONE -Step 1: Exploratory Data Analysis**
+
+-   Generate the five-number summary (median, minimum and maximum and 1st and 3rd quartile values), plus mean and standard deviation, for each quantitative variable.
+
+```{r step1}
+d <- read_csv("https://raw.githubusercontent.com/difiore/ada-2024-datasets/main/Street_et_al_2017.csv")
+attach(d)
+summary(d)
+```
+
+#### **DONE - Step 2: Generate Plots**
+
+-   From this dataset, plot brain size (**ECV**) as a function of social group size (**Group_size**), longevity (**Longevity**), juvenile period length (**Weaning**), and reproductive lifespan (**Repro_lifespan**).
+
+```{r step2}
+plot(log(Group_size), log(ECV))
+plot(log(Longevity), log(ECV))
+plot(log(Weaning), log(ECV))
+plot(log(Repro_lifespan), log(ECV))
+detach(d)
+```
+
+#### **DONE - Step 3: Derive Regression Coefficients**
+
+-   Derive by hand the Beta1 and Beta2 for ECV as a function of social group size.
+
+```{r step3}
+d_noNAs <- d |> filter(!is.na(Group_size) & !is.na(ECV))
+
+x <- d_noNAs$Group_size
+y <- d_noNAs$ECV
+
+beta1 <- cor(x, y) * (sd(y)/sd(x)) # 2.46
+beta0 <- mean(y) - beta1 * mean(x) # 30.36
+cat("Beta1 = ", beta1, "\n")
+cat("Beta0 = ", beta0)
+```
+
+#### **DONE - Step 4**
+
+-   Confirm that you get the same results using the `lm()` function.
+
+```{r step4}
+lm <- lm(data = d_noNAs, ECV ~ Group_size)
+summary(lm)
+
+cat("Beta1 = ", lm$coefficients[2], "\n")
+cat("Beta0 = ", lm$coefficients[1])
+# Intercept: 30.36
+# Group_size: 2.46
+```
+
+#### **DONE - Step 5**
+
+Repeat the analysis above for three different major radiations of primates - "catarrhines", "platyrrhines", and "strepsirhines") separately. These are stored in the variable **Taxonomic_group**.
+
+Do your regression coefficients differ among groups?
+
+How might you determine this?
+
+```{r step5}
+# catarrhines
+d_cats <- d_noNAs |>
+  filter(Taxonomic_group == "Catarrhini")
+lm_cats <- lm(data = d_cats, ECV ~ Group_size)
+
+# platyrrhines
+d_plats <- d_noNAs |>
+  filter(Taxonomic_group == "Platyrrhini")
+lm_plats <- lm(data = d_plats, ECV ~ Group_size)
+
+# strepsirhines
+d_streps <- d_noNAs |>
+  filter(Taxonomic_group == "Strepsirhini")
+lm_streps <- lm(data = d_streps, ECV ~ Group_size)
+
+cat("Catarrhini Beta0: ", lm_cats$coefficients[1], ", Beta1: ", lm_cats$coefficients[2],"\n")
+cat("Platyrrhini Beta0: ", lm_plats$coefficients[1], ", Beta1: ", lm_plats$coefficients[2],"\n")
+cat("Strepsirhini Beta0: ", lm_streps$coefficients[1], ", Beta1: ", lm_streps$coefficients[2])
+```
+
+#### **Step 6**
+
+-   For your first regression of ECV on social group size, calculate the standard error for the slope coefficient, the 95% CI, and the *p* value associated with this coefficient by hand.
+
+-   Also extract this same information from the results of running the `lm()` function.
+
+```{r step6}
+d <- d_noNAs
+lm <- lm(data = d, ECV ~ Group_size)
+lm_summary <- summary(lm)
+summary(lm)
+confint(lm)
+
+# calculate B1 SE - by hand
+SSE <- sum(lm$residuals^2) # error sum of squares
+
+df_error <- nrow(d) - 1 - 1 # SSE degrees of freedom (n - p - 1)
+MSE <- SSE/df_error  # mean remaining variance
+SSX <- sum((lm$model$Group_size - mean(lm$model$Group_size))^2)  # x variation
+B1_SE <- sqrt(MSE/SSX)
+
+# 95% CI - by hand
+t <- qt(0.975, df_error)
+GS_SE <- lm_summary$coefficients[2,2]
+EM <- t * GS_SE # margin of error
+
+# B1 p-value - by hand
+p.calc = 2 * (1 - pt(abs(t), df = nrow(lm$model) - 2))
+
+cat("By-hand calculations:\n")
+cat("Beta1 std. error: ", B1_SE, "\n")
+cat("Beta1 p-value: ", p.calc, "\n")
+cat("Beta1 CI: ", (lm$coefficients[2] - EM), ", ", (lm$coefficients[2] + EM), "\n")
+
+cat("Extracted values:\n")
+cat("Beta1 std. error: ", lm_summary$coefficients[2,2], "\n")
+cat("Beta1 p-value: ", lm_summary$coefficients[2,4], "\n")
+cat("Beta1 CI:", confint(lm)[2,1], confint(lm)[2,2]) 
+
+```
+
+```{r spare_code_ignore}
+# ----- 
+# calculate t value - CORRECT
+m_summary$calc.statistic <- (m_summary$coefficients["Group_size","Estimate"] - 0)/m_summary$coefficients["Group_size", "Std. Error"]
+
+# calculate p value - incorrect...
+m_summary$calc.p.value <- 2 * pt(m_summary$calc.statistic, df = nrow(d) - 2, lower.tail = FALSE)
+# we use 2 * pt to get the 2-tailed p value alternatively, we could do...
+# m.summary$calc.p.value <- pt(-1*abs(m.summary$calc.statistic), df = nrow(d) -
+# 2, lower.tail = TRUE) + pt(abs(m.summary$calc.statistic), df = nrow(d) - 2,
+# lower.tail = FALSE) or m.summary$calc.p.value <-
+# pt(-1*abs(m.summary$calc.statistic), df = nrow(d) - 2, lower.tail = TRUE) +
+# (1-pt(abs(m.summary$calc.statistic), df = nrow(d) - 2, lower.tail = TRUE))
+m_summary
+
+# SLOPE COEFFICIENT P VALUE - PERMUTED
+p_val <- permuted.slope %>% 
+  # add a column of the absolute value of the slope
+  mutate(abs_stat=abs(stat)) %>%
+  # calculate a summary statistic
+  summarize(
+    # calculate proportion of cases where the absolute value
+    # of the permuted slope is greater than or equal to the 
+    # absolute value of the observed slope
+    estimate = mean(abs_stat >= abs(pull(original.slope, estimate)))
+  )
+
+p.value
+
+# ----
+alpha <- 0.05
+p_low <- alpha/2
+p_up <- 1 - (alpha/2)
+
+v <- seq(from = 10, to = 30, by = 1)
+
+#m <- lm(data = d, height ~ age)
+sd_lm <- glance(lm) %>% pull(sigma)
+sd_lm
+
+df <- augment(m, newdata=data.frame(age=v), se_fit=TRUE) %>%
+  # add CI
+  mutate(
+    c.lower = .fitted - qt(1-alpha/2, nrow(d) - 2) * .se.fit,
+    c.upper = .fitted + qt(1-alpha/2, nrow(d) -2) * .se.fit
+  ) %>%
+  # add PI
+  mutate(se.prediction = sqrt(sd ^ 2 + .se.fit ^ 2),
+    p.lower = .fitted - qt(1-alpha/2, nrow(d) - 2) * se.prediction,
+    p.upper = .fitted + qt(1-alpha/2, nrow(d) - 2) * se.prediction
+  )
+
+# alternatively...
+# ci <- predict(m, newdata = data.frame(age = v),
+#    interval = "confidence", level = 1 - alpha)
+#  pi <- predict(m, newdata = data.frame(age = v),
+#    interval = "prediction", 1 - alpha)
+```
+
+#### **Step 7**
+
+-   Use a permutation approach with 1000 permutations to generate a null sampling distribution for the **slope coefficient**.
+-   What is it that you need to permute?
+-   What is the **p value** associated with your **original slope coefficient**?
+-   You can use either the percentile method (i.e., using quantiles from the actual permutation-based null sampling distribution) or a theory-based method (i.e., using the standard deviation of the permutation-based null sampling distribution as the estimate of the standard error, along with a normal or t distribution), or both, to **calculate this p value**.
+
+```{r step7}
+lm <- lm(data = d, ECV ~ Group_size)
+x <- d$Group_size  
+n <- length(x)
+m <- mean(x)  
+nperm <- 1000  # number of permutation simulations
+
+perm_B1 <- numeric(nperm)  # set up a dummy vector to hold results for each permutation
+
+for (i in 1:nperm) {
+    # now we scramble the sign of individual observed - expected weights, and
+    # then take mean
+  perm_x <- sample(d$Group_size)  
+  perm_lm <- lm(ECV ~ perm_x)
+  perm_B1[i] <- coef(perm_lm)["perm_x"]
+}
+
+ permuted_diff[[i]] <- mean(sample(c(-1, 1), length(x), replace = TRUE) * abs(x -
+        mu))
+
+# calculate the two.sided p value
+(p <- (sum(permuted_diff >= abs(actual_diff)) + sum(permuted_diff <= -abs(actual_diff)))/nperm)
+
+---
+   
+cat("Original model B1 p-value: ", lm_summary$coefficients[2,4], "\n")
+cat("Permuted p-value:")
+  
+library(jmuOutlier)
+# first show plot
+perm.test(x, alternative = "two.sided", mu = mu, plot = TRUE, num.sim = nperm)
+# then 2 tailed p value
+perm.test(x, alternative = "two.sided", mu = mu, plot = FALSE, num.sim = nperm)
+abline(v = actual_diff, lty = 3, lwd = 2)
+text(x = actual_diff, y = nperm * 0.065, "Test Statistic", srt = 90, pos = 4, offset = 1)
+
+
+# SLOPE COEFFICIENT P VALUE - PERMUTED
+p_val <- permuted.slope %>% 
+  # add a column of the absolute value of the slope
+  mutate(abs_stat=abs(stat)) %>%
+  # calculate a summary statistic
+  summarize(
+    # calculate proportion of cases where the absolute value
+    # of the permuted slope is greater than or equal to the 
+    # absolute value of the observed slope
+    estimate = mean(abs_stat >= abs(pull(original.slope, estimate)))
+  )
+
+p.value
+```
+
+#### **Step 8**
+
+-   Use bootstrapping to generate a 95% CI for your estimate of the slope coefficient using both the percentile method and the theory-based method (i.e., using on the standard deviation of the bootstrapped sampling distribution as an estimate of the standard error). Do these CIs suggest that your slope coefficient is different from zero?
+
+```{r step8}
+
+```
